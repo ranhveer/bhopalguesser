@@ -1,0 +1,111 @@
+import React, { useEffect, useRef, useState } from "react";
+import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
+import L from "leaflet";
+
+// Fix for missing marker icons in leaflet
+import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
+import markerIcon from "leaflet/dist/images/marker-icon.png";
+import markerShadow from "leaflet/dist/images/marker-shadow.png";
+
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: markerIcon2x,
+  iconUrl: markerIcon,
+  shadowUrl: markerShadow,
+});
+
+// Bounding box for Bhopal (approx): [southWestLat, southWestLng, northEastLat, northEastLng]
+const BHOPAL_BOUNDS = [
+  [23.15, 77.30], // SW
+  [23.35, 77.50], // NE
+];
+
+const getRandomCoordinate = () => {
+  const [swLat, swLng] = BHOPAL_BOUNDS[0];
+  const [neLat, neLng] = BHOPAL_BOUNDS[1];
+  const lat = Math.random() * (neLat - swLat) + swLat;
+  const lng = Math.random() * (neLng - swLng) + swLng;
+  return [lat, lng];
+};
+
+function ClickHandler({ onClick }) {
+  useMapEvents({
+    click(e) {
+      onClick(e.latlng);
+    },
+  });
+  return null;
+}
+
+export default function GeoGuessBhopal() {
+  const [targetLocation, setTargetLocation] = useState(null);
+  const [guessLocation, setGuessLocation] = useState(null);
+  const [showResult, setShowResult] = useState(false);
+
+  useEffect(() => {
+    setTargetLocation(getRandomCoordinate());
+  }, []);
+
+  const handleMapClick = (latlng) => {
+    setGuessLocation([latlng.lat, latlng.lng]);
+    setShowResult(true);
+  };
+
+  const getDistance = (loc1, loc2) => {
+    const toRad = (val) => (val * Math.PI) / 180;
+    const R = 6371; // km
+    const dLat = toRad(loc2[0] - loc1[0]);
+    const dLon = toRad(loc2[1] - loc1[1]);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(loc1[0])) *
+        Math.cos(toRad(loc2[0])) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  return (
+    <div className="w-full h-screen">
+      <MapContainer
+        center={[23.2599, 77.4126]}
+        zoom={13}
+        style={{ height: "100%", width: "100%" }}
+      >
+        <TileLayer
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        />
+        <ClickHandler onClick={handleMapClick} />
+
+        {guessLocation && <Marker position={guessLocation} />}
+        {showResult && targetLocation && <Marker position={targetLocation} />}
+      </MapContainer>
+
+      {showResult && targetLocation && guessLocation && (
+        <div className="absolute top-4 left-4 bg-white p-4 rounded-xl shadow-lg">
+          <p>
+            You guessed: {guessLocation[0].toFixed(4)}, {guessLocation[1].toFixed(4)}
+          </p>
+          <p>
+            Actual location: {targetLocation[0].toFixed(4)}, {targetLocation[1].toFixed(4)}
+          </p>
+          <p>
+            Distance: {getDistance(targetLocation, guessLocation).toFixed(2)} km
+          </p>
+          <button
+            className="mt-2 px-4 py-2 bg-blue-500 text-white rounded"
+            onClick={() => {
+              setTargetLocation(getRandomCoordinate());
+              setGuessLocation(null);
+              setShowResult(false);
+            }}
+          >
+            Play Again
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
